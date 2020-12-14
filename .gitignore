@@ -1,0 +1,5 @@
+*.zip
+venv
+*.pt
+*.npz
+/lightning_logs/
