@@ -1,4 +1,5 @@
 import copy
+from time import sleep
 
 import numpy as np
 import torch
@@ -9,7 +10,7 @@ from tqdm import trange
 
 from prism import Head, PrismAndHead, Prism
 
-BATCH_SIZE = 128
+BATCH_SIZE = 2048
 N_EPOCHS = 1
 
 def make_dataloaders_and_pahs(prism, numpy_path, how_many):
@@ -29,6 +30,9 @@ def make_dataloaders_and_pahs(prism, numpy_path, how_many):
         def __getitem__(self, idx):
             obs = self.obs[idx]
             act = self.act[idx]
+
+            #print(obs.shape)
+
             return self.to_tensor(obs).float(), torch.as_tensor(act).long()
 
         def __len__(self):
@@ -36,7 +40,7 @@ def make_dataloaders_and_pahs(prism, numpy_path, how_many):
 
     t = []
     for i in range(how_many):
-        t.append((DataLoader(PrismDataset(obs_chunks[i], act_chunks[i]), BATCH_SIZE, num_workers=1), PrismAndHead(prism, Head(nb_discrete_actions=6))))
+        t.append(DataLoader(PrismDataset(obs_chunks[i], act_chunks[i]), BATCH_SIZE, num_workers=1))
     return t
 
 def sanity_check(model1, model2):
@@ -46,17 +50,39 @@ def sanity_check(model1, model2):
             return False
     return True
 
-def main(env_name):
-    prism = Prism()
-    loader_pahs = make_dataloaders_and_pahs(prism, f"./{env_name}/dataset/dataset.npz", 8)
+def accuracy(loader, pah):
+    pah.to("cuda")
+    t = []
+    for obss, acts in loader:
+        with torch.no_grad():
+            preds = torch.argmax(pah(obss.to("cuda")), dim=1).cpu()
+        t.append((preds == acts).float().mean().cpu().numpy())
+    return np.array(t).mean()
 
-    for i in trange(N_EPOCHS):
-        print(i)
-        olds = []
-        for loader, pah in loader_pahs:
-            trainer = pl.Trainer(gpus=1, max_epochs=2)
-            trainer.fit(pah, loader)
-            olds.append(copy.deepcopy(prism).to("cpu"))
+def main(env_name):
+
+    prism = Prism()
+    #prism.load_state_dict(torch.load(f"./{env_name}/prism.pt"))
+    loader_pahs = make_dataloaders_and_pahs(prism, f"./{env_name}/dataset/dataset.npz", 1)
+
+    try:
+        for i in trange(N_EPOCHS):
+            print(i)
+            #olds = []
+            for loader in loader_pahs:
+                pah = PrismAndHead(prism, 6)
+                print(accuracy(loader, pah))
+                trainer = pl.Trainer(gpus=1, max_epochs=2000)
+                trainer.fit(pah, loader)
+                print(accuracy(loader, pah))
+                #olds.append(copy.deepcopy(prism).to("cpu"))
+    except KeyboardInterrupt:
+        pass
+    sleep(10)
+    torch.save(pah.state_dict(), f"./{env_name}/pah.pt")
     torch.save(prism.state_dict(), f"./{env_name}/prism.pt")
+
+
+
 if __name__ == '__main__':
     main("PongNoFrameskip-v4")

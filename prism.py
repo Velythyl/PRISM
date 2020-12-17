@@ -16,43 +16,68 @@ class Prism(nn.Module):
     """
     def __init__(self):
         super(Prism, self).__init__()
+        # relu dies https://datascience.stackexchange.com/questions/5706/what-is-the-dying-relu-problem-in-neural-networks
 
-        self.seq = nn.Sequential(
+        self.seq1 = nn.Sequential(
             nn.Conv2d(4, 32, kernel_size=8, stride=4, padding=0),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Flatten(),
+            nn.Linear(3136, 1500),
+            nn.LeakyReLU(),
         )
 
+        self.seq2 = nn.Sequential(
+            nn.Linear(1500, 300),
+            nn.Sigmoid()
+        )
+        """
+        old:
+        nn.Linear(3136, 1500),
+            nn.LeakyReLU(),
+            nn.Linear(1500, 512),
+            nn.LeakyReLU(),"""
+    def train_pred(self, x):
+        x2 = self.seq1(x)
+        return x2, self.seq2(x2)
+
     def forward(self, x):
+        #print(x.shape)
         #print(self.seq(x).shape)
-        return self.seq(x)
+        return self.seq2(self.seq1(x))
 
 class Head(nn.Module):
-    def __init__(self, input_space=3136, nb_discrete_actions=None):
+    def __init__(self, input_space=128, nb_discrete_actions=None):
         super().__init__()
         assert nb_discrete_actions is not None
-        self.seq = nn.Sequential(
-            nn.Linear(input_space, int(input_space/2)),
-            nn.ReLU(),
-            nn.Linear(int(input_space/2), nb_discrete_actions),
-            nn.Sigmoid()    # maps to probs, kinda
-        )
+
 
     def forward(self, x):
+        #print(x.shape)
         return self.seq(x)
 
 class PrismAndHead(pl.LightningModule):
-    def __init__(self, prism, head):
+    def __init__(self, prism, nb_discrete_actions):
         super(PrismAndHead, self).__init__()
-        self.seq = nn.Sequential(prism, head)
+        self.prism = prism
+
+        self.seq1 = nn.Sequential(
+            nn.Linear(300, 1500),
+            nn.LeakyReLU()
+        )
+        self.seq2 = nn.Sequential(
+            nn.Linear(1500, nb_discrete_actions),
+            # nn.LeakyReLU(),
+            # nn.Linear(3000, nb_discrete_actions),
+            nn.Sigmoid()  # maps to probs, kinda
+        )
 
     def forward(self, x):
         # prism computes features, and then those are piped to the head to predict actions
-        return self.seq(x)
+        return self.seq2(self.seq1(self.prism(x)))
 
     def predict(self, obs):
         return self(obs)
@@ -60,13 +85,24 @@ class PrismAndHead(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         obs, act = batch
 
-        predicted_act = self(obs)
-        loss = F.cross_entropy(predicted_act, act)
+        pre_latent, latent = self.prism.train_pred(obs)
+        post_latent = self.seq1(latent)
+        predicted_act = self.seq2(post_latent)
 
+        il_loss = F.cross_entropy(predicted_act, act)
+        reconstruction_loss = F.mse_loss(pre_latent, post_latent)
+
+        #print(il_loss)
+        #print(reconstruction_loss)
+        #print(loss)
+
+        loss = il_loss + reconstruction_loss
+        self.log("il_loss", il_loss)
+        self.log("recon_loss", reconstruction_loss)
         self.log("train_loss", loss)
 
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=3e-4)
         return optimizer

@@ -1,13 +1,14 @@
 import gym
 import time
 
+import psutil
 import torch
 import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.vec_env import VecFrameStack
 
-from env import NormalEnv, FliplrEnv
+from env import NormalEnv, FliplrEnv, PrismEnv, ChromShiftEnv
 from eval import evaluate
 from prism import Prism, Head, PrismAndHead
 from torchvision.transforms import ToTensor
@@ -34,12 +35,15 @@ def get_fake_policy(env):
     return policy
 
 def test_loop(env_name, policy=None):
-    env = FliplrEnv(env_name, 1)
+    #prism = Prism()
+    #prism.load_state_dict(torch.load(f"{env_name}/prism.pt"))
+    #prism.eval()
+    env = ChromShiftEnv(env_name, 1)
     #env = ShiftedEnv(env_name, np.array([[.13, 0, 0],
                            #  [0, .1, 0],
                             # [0 ,0 ,.1]]))
 
-    policy = PPO.load(f"./{env_name}/expert/expert_nonshifted1000000.zip")
+    policy = PPO.load(f"./{env_name}/expert/expert_ChromShiftEnv_1000000.zip")
     policy.set_env(env)
 
     if policy is None:

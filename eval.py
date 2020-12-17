@@ -15,14 +15,14 @@ def evaluate(env, episodes, policy, render_obs=False):
         episode_rewards = []
         done = False
         obs = env.reset()
-        render()
+        #render()
         while not done:
             # _states are only useful when using LSTM policies
             action = policy.predict(obs, deterministic=True)
             # here, action, rewards and dones are arrays
             # because we are using vectorized env
             obs, reward, done, info = env.step(action)
-            render()
+            #render()
             episode_rewards.append(reward)
         print(sum(episode_rewards))
 
