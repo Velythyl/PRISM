@@ -125,6 +125,7 @@ def PrismEnv(env, prism):
 
     to_tensor = ToTensor()
     flatten = torch.nn.Flatten()
+    maxed = [0]
     def apply_prism(vectorized_stacked_frames):
         shape = vectorized_stacked_frames.shape
         tensor = torch.zeros((shape[0], shape[-1], shape[1], shape[2])).float()
@@ -134,10 +135,17 @@ def PrismEnv(env, prism):
             tensor[i] = tensorized
         with torch.no_grad():
             prismed = prism(tensor.to("cuda"))
-            prismed *= 255
+            prismed *= 255/6
+            torch.clip(prismed, 0, 25, out=prismed)
+            prismed *= 255/25
             prismed = prismed.to(torch.uint8)
             #print(prismed.shape)
         prismed = prismed.cpu().numpy()
+
+        #if prismed.max() > maxed[0]:
+        #    maxed[0] = prismed.max()
+         #   print(maxed)
+
         #print(np.max(prismed))
         return prismed
 
@@ -152,7 +160,7 @@ def PrismEnv(env, prism):
     env.width = None
     env.height = None
     env.observation_space = gym.spaces.Box(
-        low=0, high=255, shape=(300,), dtype=np.uint8
+        low=0, high=255, shape=(128,), dtype=np.uint8
     )
 
     env.reset = reset

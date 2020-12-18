@@ -31,8 +31,8 @@ class Prism(nn.Module):
         )
 
         self.seq2 = nn.Sequential(
-            nn.Linear(1500, 300),
-            nn.Sigmoid()
+            nn.Linear(1500, 128),
+            nn.ReLU6()
         )
         """
         old:
@@ -65,14 +65,14 @@ class PrismAndHead(pl.LightningModule):
         self.prism = prism
 
         self.seq1 = nn.Sequential(
-            nn.Linear(300, 1500),
+            nn.Linear(128, 1500),
             nn.LeakyReLU()
         )
         self.seq2 = nn.Sequential(
             nn.Linear(1500, nb_discrete_actions),
             # nn.LeakyReLU(),
             # nn.Linear(3000, nb_discrete_actions),
-            nn.Sigmoid()  # maps to probs, kinda
+            nn.LeakyReLU()  # maps to probs, kinda
         )
 
     def forward(self, x):
@@ -90,7 +90,7 @@ class PrismAndHead(pl.LightningModule):
         predicted_act = self.seq2(post_latent)
 
         il_loss = F.cross_entropy(predicted_act, act)
-        reconstruction_loss = F.mse_loss(pre_latent, post_latent)
+        reconstruction_loss = F.mse_loss(pre_latent, post_latent)*10
 
         #print(il_loss)
         #print(reconstruction_loss)

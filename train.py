@@ -16,7 +16,7 @@ from utils import makedirs
 
 def train(env_name, n_timesteps):
     prism = Prism()
-    prism.load_state_dict(torch.load(f"./{env_name}/prism.pt"))
+    prism.load_state_dict(torch.load(f"./{env_name}/prism4.pt"))
     prism.eval()
 
     x = NormalEnv(env_name, 6)
@@ -26,6 +26,9 @@ def train(env_name, n_timesteps):
     a = x.reset()
     b = y.reset()
     c = z.reset()
+
+    temp = b.astype(float)-c
+    temp2 = temp.max()
 
     surrogate = gym.make("Pong-ram-v4")
 
@@ -39,13 +42,13 @@ def train(env_name, n_timesteps):
 #    z = ChromShiftEnv(env_name, n_envs=1).classname
     start = time.time()
     with makedirs(f"./{env_name}/expert"):
-        expert = PPO("CnnPolicy",
+        expert = PPO("MlpPolicy",
                      #https://colab.research.google.com/github/Stable-Baselines-Team/rl-colab-notebooks/blob/master/atari_games.ipynb#scrollTo=TgjfyOTPVxG6
-                     NormalEnv(env_name, 6),
+                     PrismEnv(NormalEnv(env_name, 6), prism),
 
-                     #policy_kwargs={"net_arch": [{"vf": [200, 100], "pi": [128]}]},
+                     policy_kwargs={"net_arch": [dict(pi=[128, 128, 128, 128], vf=[128, 128, 128, 128])], "activation_fn": torch.nn.ReLU},
                      #n_steps=64,
-                    # batch_size=2048,
+                     # batch_size=2048,
                      ##n_epochs=8,
                      #learning_rate=2.5e-4,
                      #clip_range=0.1,
@@ -55,7 +58,7 @@ def train(env_name, n_timesteps):
                      ).learn(n_timesteps)
         expert.save(f"./{env_name}/expert/expert_welpthisisfucked2_{n_timesteps}")
     print("training took:", time.time()-start)
-    env = TempEnv(env_name,1)
+    env = PrismEnv(NormalEnv(env_name, 1), prism)
     obs = env.reset()
     env.render()
     #time.sleep(100)
@@ -72,4 +75,4 @@ def train(env_name, n_timesteps):
     print(trew)
 
 if __name__ == "__main__":
-    train("PongNoFrameskip-v4", 1000000)
+    train("PongNoFrameskip-v4", 10000000)

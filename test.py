@@ -35,15 +35,15 @@ def get_fake_policy(env):
     return policy
 
 def test_loop(env_name, policy=None):
-    #prism = Prism()
-    #prism.load_state_dict(torch.load(f"{env_name}/prism.pt"))
-    #prism.eval()
-    env = TempEnv(env_name, 1)
+    prism = Prism()
+    prism.load_state_dict(torch.load(f"{env_name}/prism4.pt"))
+    prism.eval()
+    env = PrismEnv(NormalEnv(env_name, 1), prism)
     #env = ShiftedEnv(env_name, np.array([[.13, 0, 0],
                            #  [0, .1, 0],
                             # [0 ,0 ,.1]]))
 
-    policy = PPO.load(f"./{env_name}/expert/expert_NormalEnv_1000000.zip")
+    policy = PPO.load(f"./{env_name}/expert/expert_welpthisisfucked2_1000000.zip")
     policy.set_env(env)
 
     if policy is None:
