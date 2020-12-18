@@ -5,10 +5,37 @@ import gym
 import numpy as np
 import psutil
 import torch
+from gym.wrappers import FrameStack, AtariPreprocessing
 from stable_baselines3.common.atari_wrappers import AtariWrapper
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecFrameStack, DummyVecEnv, SubprocVecEnv, VecEnv
 from torchvision.transforms import ToTensor
+
+def TempEnv(env_name, n_envs):
+    class Squeeze(gym.ObservationWrapper):
+        def __init__(self, env):
+            gym.ObservationWrapper.__init__(self, env)
+            self.observation_space = gym.spaces.Box(0, 255, (84, 84), dtype=np.uint8)
+        def observation(self, frame: np.ndarray) -> np.ndarray:
+            return np.squeeze(frame)
+
+    class Reshift(gym.ObservationWrapper):
+        def __init__(self, env):
+            gym.ObservationWrapper.__init__(self, env)
+            self.observation_space = gym.spaces.Box(0, 255, (84, 84, 4), dtype=np.uint8)
+        def observation(self, frame: np.ndarray) -> np.ndarray:
+            return frame.__array__().reshape((frame.shape[1], frame.shape[2], frame.shape[0]))
+
+    class Wrap(gym.Wrapper):
+        def __init__(self, env):
+            env = (FrameStack(Squeeze(AtariWrapper(env, **{})), 4))
+            gym.Wrapper.__init__(self, env)
+
+    return make_vec_env(
+        env_name,
+        n_envs=n_envs,
+        wrapper_class=Wrap
+    )
 
 
 def _AtariEnv(env_name, n_envs, seed=None, wrappers_before_atari=[], wrappers_after_atari=[]):
@@ -20,6 +47,13 @@ def _AtariEnv(env_name, n_envs, seed=None, wrappers_before_atari=[], wrappers_af
             env = wrap(env)
         return env
 
+    temp = make_vec_env(
+            env_name,
+            n_envs=n_envs,
+            seed=seed,
+            start_index=0,
+            wrapper_class=make_wrapper,
+        )
     env = VecFrameStack(
         make_vec_env(
             env_name,
@@ -82,21 +116,12 @@ def ChromShiftEnv(env_name, n_envs, seed=None):
 
     return _AtariEnv(env_name, n_envs, wrappers_before_atari=[Shifted], seed=seed)
 
-def PrismEnv(env, surrogate, prism):
+def PrismEnv(env, prism):
+
     prism.to("cuda")
+
     step_wait_copy = env.step_wait
     reset_copy = env.reset
-
-    class Prismed(gym.ObservationWrapper):
-        def __init__(self, surrogate: gym.Env):
-            gym.ObservationWrapper.__init__(self, surrogate)
-            gym.observation_space = gym.spaces.Box(
-                low=0, high=255, shape=(300,), dtype=np.uint8
-            )
-        def observation(self, frame: np.ndarray) -> np.ndarray:
-            env.step_async()
-            return frame
-
 
     to_tensor = ToTensor()
     flatten = torch.nn.Flatten()
@@ -110,7 +135,6 @@ def PrismEnv(env, surrogate, prism):
         with torch.no_grad():
             prismed = prism(tensor.to("cuda"))
             prismed *= 255
-            prismed = torch.round(prismed)
             prismed = prismed.to(torch.uint8)
             #print(prismed.shape)
         prismed = prismed.cpu().numpy()

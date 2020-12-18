@@ -60,6 +60,14 @@ def accuracy(loader, pah):
     return np.array(t).mean()
 
 def main(env_name):
+    prism = Prism()
+    prism.load_state_dict(torch.load(f"./{env_name}/prism.pt"))
+    pah = PrismAndHead(prism, 6)
+    pah.load_state_dict(torch.load(f"./{env_name}/pah.pt"))
+    pah.eval()
+    for loader in make_dataloaders_and_pahs(prism, f"./{env_name}/dataset/dataset.npz", 1):
+        print(accuracy(loader, pah))
+    exit()
 
     prism = Prism()
     #prism.load_state_dict(torch.load(f"./{env_name}/prism.pt"))
