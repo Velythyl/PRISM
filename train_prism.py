@@ -81,7 +81,7 @@ def main(env_name):
             for loader in loader_pahs:
                 pah = PrismAndHead(prism, 6)
                 print(accuracy(loader, pah))
-                trainer = pl.Trainer(gpus=1, max_epochs=2000)
+                trainer = pl.Trainer(gpus=1, max_epochs=500)
                 trainer.fit(pah, loader)
                 print(accuracy(loader, pah))
                 #olds.append(copy.deepcopy(prism).to("cpu"))
@@ -89,7 +89,7 @@ def main(env_name):
         pass
     sleep(10)
     torch.save(pah.state_dict(), f"./{env_name}/pah.pt")
-    torch.save(prism.state_dict(), f"./{env_name}/prism4.pt")
+    torch.save(prism.state_dict(), f"./{env_name}/new_prism.pt")
 
 
 

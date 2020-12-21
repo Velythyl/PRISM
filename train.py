@@ -16,7 +16,7 @@ from utils import makedirs
 
 def train(env_name, n_timesteps):
     prism = Prism()
-    prism.load_state_dict(torch.load(f"./{env_name}/prism4.pt"))
+    prism.load_state_dict(torch.load(f"./{env_name}/prism16.pt"))
     prism.eval()
 
     x = NormalEnv(env_name, 6)
@@ -46,8 +46,8 @@ def train(env_name, n_timesteps):
                      #https://colab.research.google.com/github/Stable-Baselines-Team/rl-colab-notebooks/blob/master/atari_games.ipynb#scrollTo=TgjfyOTPVxG6
                      PrismEnv(NormalEnv(env_name, 6), prism),
 
-                     policy_kwargs={"net_arch": [dict(pi=[128, 128, 128, 128], vf=[128, 128, 128, 128])], "activation_fn": torch.nn.ReLU},
-                     #n_steps=64,
+                     #policy_kwargs={"net_arch": [dict(pi=[64,64,64], vf=[64,64,64])], "activation_fn": torch.nn.LeakyReLU},
+                     n_steps=10000,
                      # batch_size=2048,
                      ##n_epochs=8,
                      #learning_rate=2.5e-4,
@@ -56,7 +56,7 @@ def train(env_name, n_timesteps):
                      #ent_coef=0.01,
                      verbose=1
                      ).learn(n_timesteps)
-        expert.save(f"./{env_name}/expert/expert_welpthisisfucked2_{n_timesteps}")
+        expert.save(f"./{env_name}/expert/expert_latest2_{n_timesteps}")
     print("training took:", time.time()-start)
     env = PrismEnv(NormalEnv(env_name, 1), prism)
     obs = env.reset()
@@ -75,4 +75,4 @@ def train(env_name, n_timesteps):
     print(trew)
 
 if __name__ == "__main__":
-    train("PongNoFrameskip-v4", 10000000)
+    train("PongNoFrameskip-v4", 15000000)

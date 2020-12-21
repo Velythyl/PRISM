@@ -26,13 +26,14 @@ class Prism(nn.Module):
             nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
             nn.LeakyReLU(),
             nn.Flatten(),
-            nn.Linear(3136, 1500),
+            nn.Linear(3136, 1000),
             nn.LeakyReLU(),
+            nn.Dropout(),
         )
 
         self.seq2 = nn.Sequential(
-            nn.Linear(1500, 128),
-            nn.ReLU6()
+            nn.Linear(1000, 16),
+            nn.ReLU6(),
         )
         """
         old:
@@ -40,6 +41,12 @@ class Prism(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(1500, 512),
             nn.LeakyReLU(),"""
+
+    def eval(self):
+        super().eval()
+        for param in self.parameters():
+            param.requires_grad = False
+
     def train_pred(self, x):
         x2 = self.seq1(x)
         return x2, self.seq2(x2)
@@ -65,11 +72,11 @@ class PrismAndHead(pl.LightningModule):
         self.prism = prism
 
         self.seq1 = nn.Sequential(
-            nn.Linear(128, 1500),
+            nn.Linear(16, 1000),
             nn.LeakyReLU()
         )
         self.seq2 = nn.Sequential(
-            nn.Linear(1500, nb_discrete_actions),
+            nn.Linear(1000, nb_discrete_actions),
             # nn.LeakyReLU(),
             # nn.Linear(3000, nb_discrete_actions),
             nn.LeakyReLU()  # maps to probs, kinda
