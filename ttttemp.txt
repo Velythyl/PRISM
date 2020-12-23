@@ -1,6 +1,0 @@
-Prismed on chromshift 25000000: 16.77. On normal: 21(?)
-
-#Prismed normal 21500000: 16.47.  Prismed chromshift 21500000: 16.99. Weird.
-
-Normal with rouding: 16.24
-Chrom without rounding: 12.25

@@ -6,6 +6,7 @@ from tqdm import trange
 
 from env import PrismEnv
 from new_prism import Prism
+from prism_bottleneck import PrismBottleneck
 
 
 def evaluate(env, episodes, policy, render_obs=False):
@@ -36,12 +37,12 @@ def evaluate(env, episodes, policy, render_obs=False):
     return mean_episode_reward
 
 if __name__ == "__main__":
-    prism = Prism()
-    prism.load_state_dict(torch.load(f"{'PongNoFrameskip-v4'}/new_prism.pt"))
+    prism = PrismBottleneck(32)
+    prism.load_state_dict(torch.load(f"{'PongNoFrameskip-v4'}/prism32.pt"))
     prism.eval()
-    env = PrismEnv(prism, 'PongNoFrameskip-v4', 1, False)
+    env = PrismEnv(prism, 'PongNoFrameskip-v4', 1, True)
 
-    policy = PPO.load(f"./PongNoFrameskip-v4/expert/expert_NewPrismEnv@NormalEnv_21500000.zip")
+    policy = PPO.load(f"./PongNoFrameskip-v4/expert/expert_32PrismEnv@NormalEnv_10000000.zip")
     policy.set_env(env)
 
     evaluate(env, 200, policy, False)

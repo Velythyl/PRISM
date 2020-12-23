@@ -1,3 +1,1 @@
-# Capacity
-
-Learning a bimodal distribution requires a lot of expressivity. And with the Nature CNN, 
+https://www.overleaf.com/9254873525nyhxrwspkmpv
