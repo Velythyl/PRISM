@@ -1,21 +1,19 @@
 import torch
-import torch.nn as nn
+from torch import nn
 import pytorch_lightning as pl
 import torch.nn.functional as F
 
-FLAT_SIZE = 1536
-
-class Prism(nn.Module):
+class PrismBottleneck(nn.Module):
     """
     Based on the Nature CNN https://github.com/DLR-RM/stable-baselines3/blob/b8c72a53489c6d80196a1dc168835a2f375b868d/stable_baselines3/common/torch_layers.py#L50
     From
-
     Mnih, Volodymyr, et al.
         "Human-level control through deep reinforcement learning."
         Nature 518.7540 (2015): 529-533.
     """
-    def __init__(self):
-        super(Prism, self).__init__()
+    def __init__(self, neck):
+        super(PrismBottleneck, self).__init__()
+        self.neck = neck
         # relu dies https://datascience.stackexchange.com/questions/5706/what-is-the-dying-relu-problem-in-neural-networks
 
         self.seq1 = nn.Sequential(
@@ -32,15 +30,9 @@ class Prism(nn.Module):
         )
 
         self.seq2 = nn.Sequential(
-            nn.Linear(1000, 16),
+            nn.Linear(1000, neck),
             nn.ReLU6(),
         )
-        """
-        old:
-        nn.Linear(3136, 1500),
-            nn.LeakyReLU(),
-            nn.Linear(1500, 512),
-            nn.LeakyReLU(),"""
 
     def eval(self):
         super().eval()
@@ -52,34 +44,20 @@ class Prism(nn.Module):
         return x2, self.seq2(x2)
 
     def forward(self, x):
-        #print(x.shape)
-        #print(self.seq(x).shape)
         return self.seq2(self.seq1(x))
 
-class Head(nn.Module):
-    def __init__(self, input_space=128, nb_discrete_actions=None):
-        super().__init__()
-        assert nb_discrete_actions is not None
-
-
-    def forward(self, x):
-        #print(x.shape)
-        return self.seq(x)
-
-class PrismAndHead(pl.LightningModule):
+class PrismBottleneckAndHead(pl.LightningModule):
     def __init__(self, prism, nb_discrete_actions):
-        super(PrismAndHead, self).__init__()
+        super(PrismBottleneckAndHead, self).__init__()
         self.prism = prism
 
         self.seq1 = nn.Sequential(
-            nn.Linear(16, 1000),
+            nn.Linear(32, 1000),
             nn.LeakyReLU()
         )
         self.seq2 = nn.Sequential(
             nn.Linear(1000, nb_discrete_actions),
-            # nn.LeakyReLU(),
-            # nn.Linear(3000, nb_discrete_actions),
-            nn.LeakyReLU()  # maps to probs, kinda
+            nn.LeakyReLU()
         )
 
     def forward(self, x):
@@ -98,10 +76,6 @@ class PrismAndHead(pl.LightningModule):
 
         il_loss = F.cross_entropy(predicted_act, act)
         reconstruction_loss = F.mse_loss(pre_latent, post_latent)*10
-
-        #print(il_loss)
-        #print(reconstruction_loss)
-        #print(loss)
 
         loss = il_loss + reconstruction_loss
         self.log("il_loss", il_loss)

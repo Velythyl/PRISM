@@ -1,75 +1,47 @@
 import gym
-import time
-
-import psutil
-import torch
 import numpy as np
+import torch
 from stable_baselines3 import PPO
-from stable_baselines3.common.env_util import make_atari_env
-from stable_baselines3.common.vec_env import VecFrameStack
+from tqdm import trange
 
-from env import NormalEnv, FliplrEnv, PrismEnv, ChromShiftEnv, TempEnv
-from eval import evaluate
-from prism import Prism, Head, PrismAndHead
-from torchvision.transforms import ToTensor
-import cv2
+from env import PrismEnv
+from new_prism import Prism
 
 
+def evaluate(env, episodes, policy, render_obs=False):
+    if isinstance(env, str):
+        env = gym.make(env)
 
-def get_fake_policy(env):
-    class FakePolicy(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            prism = Prism()
-            head = Head(env.action_space.n)
-            self.pah = PrismAndHead(prism, head)
-            self.pah.eval()
-
-        def predict(self, obs):
-            with torch.no_grad():
-                tensor_obs = ToTensor()(obs)
-                tensor_obs = torch.unsqueeze(tensor_obs, 0)
-                return np.argmax(self.pah(tensor_obs.to("cuda")).cpu().numpy())
-    policy = FakePolicy()
-    policy = policy.to("cuda")
-    return policy
-
-def test_loop(env_name, policy=None):
-    prism = Prism()
-    prism.load_state_dict(torch.load(f"{env_name}/prism16.pt"))
-    prism.eval()
-    env = PrismEnv(ChromShiftEnv(env_name, 1), prism)
-    #env = ShiftedEnv(env_name, np.array([[.13, 0, 0],
-                           #  [0, .1, 0],
-                            # [0 ,0 ,.1]]))
-
-    policy = PPO.load(f"./{env_name}/expert/expert_latest_15000000.zip")
-    policy.set_env(env)
-
-    if policy is None:
-        policy = get_fake_policy(env)
-
-    evaluate(env, 200, policy, True)
-    exit()
-
-    obs = env.reset()
-    #obs1 = env1.reset()
-
-#$cv2.imshow("a", cv2.cvtColor(obs, cv2.COLOR_RGB2BGR)); cv2.waitKey()
- #   cv2.imshow("a", cv2.cvtColor(obs1, cv2.COLOR_RGB2BGR)); cv2.waitKey()
-
-    env.render()
-    done = False
-    trew = 0
-    with torch.no_grad():
-        while not done:
-            act = policy.predict(obs)
-            print(act)
-            obs, rew, done, _ = env.step(act)
+    def render():
+        if render_obs:
             env.render()
-            #time.sleep(1)
-            trew += rew
-    print("Done testing.", trew)
+
+    all_episode_rewards = []
+    for i in trange(episodes):
+        episode_rewards = []
+        done = False
+        obs = env.reset()
+        render()
+        while not done:
+            action = policy.predict(obs, deterministic=True)
+            obs, reward, done, info = env.step(action)
+            render()
+            episode_rewards.append(reward)
+
+        all_episode_rewards.append(sum(episode_rewards))
+
+    mean_episode_reward = np.mean(all_episode_rewards)
+    print("Mean reward:", mean_episode_reward, "Num episodes:", episodes)
+
+    return mean_episode_reward
 
 if __name__ == "__main__":
-    test_loop('PongNoFrameskip-v4')
+    prism = Prism()
+    prism.load_state_dict(torch.load(f"{'PongNoFrameskip-v4'}/new_prism.pt"))
+    prism.eval()
+    env = PrismEnv(prism, 'PongNoFrameskip-v4', 1, False)
+
+    policy = PPO.load(f"./PongNoFrameskip-v4/expert/expert_NewPrismEnv@NormalEnv_21500000.zip")
+    policy.set_env(env)
+
+    evaluate(env, 200, policy, False)

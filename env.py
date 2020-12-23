@@ -11,31 +11,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecFrameStack, DummyVecEnv, SubprocVecEnv, VecEnv
 from torchvision.transforms import ToTensor
 
-def TempEnv(env_name, n_envs):
-    class Squeeze(gym.ObservationWrapper):
-        def __init__(self, env):
-            gym.ObservationWrapper.__init__(self, env)
-            self.observation_space = gym.spaces.Box(0, 255, (84, 84), dtype=np.uint8)
-        def observation(self, frame: np.ndarray) -> np.ndarray:
-            return np.squeeze(frame)
-
-    class Reshift(gym.ObservationWrapper):
-        def __init__(self, env):
-            gym.ObservationWrapper.__init__(self, env)
-            self.observation_space = gym.spaces.Box(0, 255, (84, 84, 4), dtype=np.uint8)
-        def observation(self, frame: np.ndarray) -> np.ndarray:
-            return frame.__array__().reshape((frame.shape[1], frame.shape[2], frame.shape[0]))
-
-    class Wrap(gym.Wrapper):
-        def __init__(self, env):
-            env = (FrameStack(Squeeze(AtariWrapper(env, **{})), 4))
-            gym.Wrapper.__init__(self, env)
-
-    return make_vec_env(
-        env_name,
-        n_envs=n_envs,
-        wrapper_class=Wrap
-    )
+from new_prism import Prism
 
 
 def _AtariEnv(env_name, n_envs, seed=None, wrappers_before_atari=[], wrappers_after_atari=[]):
@@ -74,49 +50,18 @@ def ChromShiftEnv(env_name, n_envs, seed=None):
     class Shifted(gym.ObservationWrapper):
         def __init__(self, env: gym.Env):
             gym.ObservationWrapper.__init__(self, env)
-
-        """
-        np.dot(filter, out=frame)
-            np.clip(0, 240, out=frame)
-            frame *= 255/240
-            frame = frame.astype('uint8')
-            import cv2
-            #cv2.imshow("", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-            #cv2.waitKey()
-            return frame"""
-
-        """
-        frame = frame.astype("float64")
-            np.dot(frame, filter, out=frame)
-            np.clip(frame, 0, 240, out=frame)
-            frame /= 240
-            frame *= 255
-            frame = frame.astype('uint8')
-           # import cv2
-           # cv2.imshow("", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-           # cv2.waitKey()
-            return frame
-        """
         def observation(self, frame: np.ndarray) -> np.ndarray:
-            """
-            frame = np.dot(frame, filter)
-            frame = np.clip(frame, 0, 240)
-            frame = frame/240*255
-            frame = frame.astype("uint8")
-            """
             frame = frame.astype("float64")
             np.dot(frame, filter, out=frame)
             np.clip(frame, 0, 240, out=frame)
             frame *= 240/255
             frame = frame.astype('uint8')
-            #import cv2
-            #cv2.imshow("", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-            # cv2.waitKey()
             return frame
 
     return _AtariEnv(env_name, n_envs, wrappers_before_atari=[Shifted], seed=seed)
 
-def PrismEnv(env, prism):
+def PrismEnv(prism, env_name, n_envs, is_shifted=False, seed=None):
+    env = NormalEnv(env_name, n_envs, seed=seed) if not is_shifted else ChromShiftEnv(env_name, n_envs, seed=seed)
 
     prism.to("cuda")
 
@@ -124,8 +69,6 @@ def PrismEnv(env, prism):
     reset_copy = env.reset
 
     to_tensor = ToTensor()
-    flatten = torch.nn.Flatten()
-    maxed = [0]
     def apply_prism(vectorized_stacked_frames):
         shape = vectorized_stacked_frames.shape
         tensor = torch.zeros((shape[0], shape[-1], shape[1], shape[2])).float()
@@ -135,18 +78,12 @@ def PrismEnv(env, prism):
             tensor[i] = tensorized
         with torch.no_grad():
             prismed = prism(tensor.to("cuda"))
-            #prismed *= 255/6
-            #torch.clip(prismed, 0, 1.3, out=prismed)
-            #prismed /= 1.3
-            #prismed *= 255/25
-            #print(prismed.shape)
+            prismed /= prismed.max()
+            #prismed *= 100
+            #torch.round(prismed, out=prismed)
+            #prismed /= 100
         prismed = prismed.cpu().numpy()
 
-        #if prismed.max() > maxed[0]:
-        #    maxed[0] = prismed.max()
-         #   print(maxed)
-
-        #print(np.max(prismed))
         return prismed
 
     def step_wait():
@@ -160,7 +97,7 @@ def PrismEnv(env, prism):
     env.width = None
     env.height = None
     env.observation_space = gym.spaces.Box(
-        low=0, high=1.3, shape=(16,), dtype=np.float
+        low=0, high=1, shape=(512 if isinstance(prism, Prism) else prism.neck,), dtype=np.float
     )
 
     env.reset = reset
@@ -170,16 +107,10 @@ def PrismEnv(env, prism):
 
     return env
 
-def FliplrEnv(env_name, n_envs, seed=None):
-    class Shifted(gym.ObservationWrapper):
-        def __init__(self, env: gym.Env):
-            gym.ObservationWrapper.__init__(self, env)
-
-        def observation(self, frame: np.ndarray) -> np.ndarray:
-            return np.fliplr(frame)
-
-    return _AtariEnv(env_name, n_envs, seed=seed, wrappers_after_atari=[Shifted])
-
+def EncapsulatePrismEnv(prism, is_shifted=False):
+    def fun(env_name, n_envs):
+        return PrismEnv(prism, env_name, n_envs, is_shifted)
+    return fun
 
 def NormalEnv(env_name, n_envs, seed=None):
     return _AtariEnv(env_name, n_envs, seed=seed)
